@@ -9,19 +9,24 @@ import sys
 
 
 class WushuEmail:
-    def __init__(self, gmail_username, gmail_password, type):
+    def __init__(self, gmail_username, gmail_password, type, email=""):
         self.gmail_username = gmail_username
         self.gmail_password = gmail_password
         self.email_message = self.create_email_msg()
         self.type = type
-        self.design_email_from_template()
+        self.design_email_from_template(email)
         self.attach_images()
 
     def create_email_msg(self):
         msg = MIMEMultipart("alternative")
         return msg
 
-    def design_email_from_template(self):
+    def design_email_from_template(self, email=""):
+        if email != "":
+            self.email_message["subject"] = "Cornell Wushu"
+            body = MIMEText(email, "html")
+            self.email_message.attach(body)
+            return
         now = date.today()
         monday = now
         sunday = monday + timedelta(days=6)
