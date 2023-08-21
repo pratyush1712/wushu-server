@@ -13,8 +13,8 @@ list_serv_bp = Blueprint("list_serv", __name__)
 def add_listserv_member():
     body = request.get_json()
     list_serv_members.create_index("email", unique=True)
-    resp = list_serv_members.insert_one(body)
-    return jsonify(resp), 200
+    list_serv_members.insert_one(body)
+    return json.dumps(body, default=str), 200
 
 
 @list_serv_bp.route("/", methods=["GET"])
