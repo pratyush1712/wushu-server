@@ -106,6 +106,6 @@ if __name__ == "__main__":
         if sys.argv[1] == "testing":
             email.send_email(["pratyushsudhakar03@gmail.com"])
         else:
-            email.send_email(WUSHU_MEMBERS)
+            email.send_email()
     except:
-        email.send_email(WUSHU_MEMBERS)
+        email.send_email()

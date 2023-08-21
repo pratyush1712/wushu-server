@@ -1,30 +1,34 @@
 import os
 import json
-from dotenv import load_dotenv
-from flask import Flask, request
-from pymongo import MongoClient
-from datetime import datetime, timedelta, timezone
+from flask import Flask, jsonify
+from datetime import timedelta
 from flask_cors import CORS, cross_origin
-from flask_jwt_extended import (
-    create_access_token,
-    get_jwt,
-    get_jwt_identity,
-    unset_jwt_cookies,
-    jwt_required,
-    JWTManager,
-)
-from list_serve import WushuEmail
+from flask_jwt_extended import JWTManager, create_access_token, set_access_cookies
+from flask_jwt_extended import get_jwt, get_jwt_identity
+from datetime import datetime, timedelta, timezone
+from endpoints.auth import auth_bp
+from endpoints.list_serve import list_serv_bp
+from endpoints.images import images_bp
+from endpoints.members import members_bp
+from endpoints.performances import performances_bp
 
-load_dotenv()
-app = Flask(__name__)
-cors = CORS(app)
+# app config
+app = Flask(__name__, static_folder="assets", static_url_path="/assets")
+app.config["IMAGES_FOLDER"] = "assets/images"
+
+# cors config
 app.config["CORS_HEADERS"] = "Content-Type"
-mongo_server_url = os.environ.get("MONGODB_URL")
-app.client = MongoClient(mongo_server_url)
-db = app.client[os.environ.get("DB_NAME")]
-list_serv_members = db[os.environ.get("LISTSERV_MEMBERS_COLLECTION")]
-app.config["JWT_SECRET_KEY"] = "please-remember-to-change-me"
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=20)
+CORS(
+    app,
+    origins=["https://cornellwushu.github.io", "http://localhost:3000"],
+    supports_credentials=True,
+)
+
+# auth config
+app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY")
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=30)
+app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
+app.config["JWT_COOKIE_CSRF_PROTECT"] = False
 jwt = JWTManager(app)
 
 
@@ -35,89 +39,43 @@ def init():
     return json.dumps("Welcome to Cornell Wushu Server")
 
 
-# --------------Auth-----------------
-@app.route("/token", methods=["POST"])
-def create_token():
-    email = request.json.get("email", None)
-    password = request.json.get("password", None)
-    if email != "test" or password != "test":
-        return json.dumps("Wrong email or password"), 401
-    access_token = create_access_token(identity=email)
-    return json.dumps({"access_token": access_token})
+@app.after_request
+def refresh_expiring_jwts(response):
+    """
+    After request handler to refresh JWT tokens that are close to expiry.
 
+    Args:
+        response: The original response object.
 
-@app.route("/logout", methods=["POST"])
-def logout():
-    response = json.dumps("logout successful")
-    unset_jwt_cookies(response)
+    Returns:
+        Flask response object, possibly with a refreshed access token.
+    """
+    try:
+        current_jwt = get_jwt()
+    except Exception as e:
+        return response
+
+    expiration_timestamp = current_jwt.get("exp")
+
+    if not expiration_timestamp:
+        app.logger.warning("No expiration timestamp in JWT. Skipping token refresh.")
+        return response
+
+    current_time = datetime.now(timezone.utc)
+    threshold_time = current_time + timedelta(days=2)
+    threshold_timestamp = datetime.timestamp(threshold_time)
+
+    if expiration_timestamp < threshold_timestamp:
+        new_access_token = create_access_token(identity=get_jwt_identity())
+        set_access_cookies(response, new_access_token)
     return response
 
 
-@app.after_request
-def refresh_expiring_jwts(response):
-    try:
-        exp_timestamp = get_jwt()["exp"]
-        now = datetime.now(timezone.utc)
-        target_timestamp = datetime.timestamp(now + timedelta(hours=2))
-        if target_timestamp > exp_timestamp:
-            access_token = create_access_token(identity=get_jwt_identity())
-            data = response.get_json()
-            if type(data) is dict:
-                data["access_token"] = access_token
-                response.data = json.dumps(data)
-        return response
-    except (RuntimeError, KeyError):
-        return response
-
-
-# --------------ListServ-----------------
-@app.route("/add_listserv_member", methods=["POST"])
-@cross_origin()
-def add_listserv_member():
-    body = json.loads(request.data)
-    list_serv_members.create_index("email", unique=True)
-    resp = list_serv_members.insert_one(body)
-    return json.dumps(resp, default=str)
-
-
-@app.route("/get_listserv_members")
-@cross_origin()
-def get_listserv_members():
-    resp = list(list_serv_members.find())
-    return json.dumps(resp, default=str)
-
-
-@app.route("/remove_listserv_member", methods=["POST"])
-@cross_origin()
-def remove_listserv_members():
-    body = json.loads(request.data)
-    resp = list_serv_members.delete_one(body)
-    return json.dumps(resp, default=str)
-
-
-@app.route("/send_email", methods=["POST"])
-@jwt_required()
-@cross_origin()
-def send_email():
-    body = json.loads(request.data)
-    print(body)
-    try:
-        if body.get("sendAll"):
-            receivers = [member["email"] for member in list_serv_members.find()]
-        else:
-            receivers = body.get("receivers")
-        email = WushuEmail(
-            os.environ.get("GMAIL_USER"),
-            os.environ.get("GMAIL_PASSWORD"),
-            body.get("type"),
-            body.get("body"),
-        )
-        print(receivers)
-        email.send_email(receivers)
-    except Exception as e:
-        return json.dumps(str(e))
-    return json.dumps("Email Sent Succesfully!")
-
+app.register_blueprint(auth_bp, url_prefix="/auth")
+app.register_blueprint(list_serv_bp, url_prefix="/list_serv")
+app.register_blueprint(images_bp, url_prefix="/images")
+app.register_blueprint(members_bp, url_prefix="/members")
+app.register_blueprint(performances_bp, url_prefix="/performances")
 
 if __name__ == "__main__":
     app.run("localhost", 8080, True)
