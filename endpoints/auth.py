@@ -26,16 +26,8 @@ def create_token():
         return jsonify({"error": "Wrong email or password"}), 401
 
     access_token = create_access_token(identity=email, expires_delta=expires)
-
-    # Create a response object and set the access cookies
     response = make_response(jsonify({"access_token": access_token}))
-    response.set_cookie(
-        "access_token_cookie",
-        value=access_token,
-        samesite="None",
-        secure=True,
-        httponly=True,
-    )
+    set_access_cookies(response, access_token)
 
     return response
 
