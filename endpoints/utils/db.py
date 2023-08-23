@@ -23,9 +23,9 @@ s3 = boto3.client(
 )
 
 
-def upload_to_aws(local_file, bucket, s3_file):
+def upload_to_aws(file, bucket, s3_file):
     try:
-        s3.upload_file(local_file, bucket, s3_file)
+        s3.upload_fileobj(file, bucket, s3_file)
         print("Upload Successful")
         return True
     except FileNotFoundError:

@@ -16,8 +16,6 @@ def upload_image():
     memberProfile = json.loads(request.form.get("memberProfile"))
 
     filename = secure_filename(file.filename)
-    file.save(os.path.join(app.config["IMAGES_FOLDER"], filename))
-    local_file = os.path.join(app.config["IMAGES_FOLDER"], filename)
 
     if isEmail:
         filename = f"emails/{filename}"
@@ -26,7 +24,7 @@ def upload_image():
         if member is not None:
             file_extension = filename.split(".")[-1]
             filename = f"{member['_id']}.{file_extension}"
-            upload_to_aws(local_file, "wushu-emails", filename)
+            upload_to_aws(file, "wushu-emails", filename)
             members.update_one(
                 {"_id": memberProfile},
                 {
@@ -35,9 +33,8 @@ def upload_image():
                     }
                 },
             )
-            os.remove(local_file)
             return jsonify({"url": f"https://wushu-emails.s3.amazonaws.com/{filename}"})
-    upload_to_aws(local_file, "wushu-emails", filename)
-    os.remove(local_file)
+
+    upload_to_aws(file, "wushu-emails", filename)
 
     return jsonify({"url": f"https://wushu-emails.s3.amazonaws.com/{filename}"})
