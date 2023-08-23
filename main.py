@@ -26,9 +26,9 @@ CORS(
 
 # auth config
 app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY")
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=30)
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=5)
 app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
-app.config["JWT_COOKIE_CSRF_PROTECT"] = True
+app.config["JWT_COOKIE_CSRF_PROTECT"] = False
 jwt = JWTManager(app)
 
 
@@ -62,12 +62,19 @@ def refresh_expiring_jwts(response):
         return response
 
     current_time = datetime.now(timezone.utc)
-    threshold_time = current_time + timedelta(days=2)
+    threshold_time = current_time + timedelta(hours=5)
     threshold_timestamp = datetime.timestamp(threshold_time)
 
     if expiration_timestamp < threshold_timestamp:
         new_access_token = create_access_token(identity=get_jwt_identity())
-        set_access_cookies(response, new_access_token)
+        response.set_cookie(
+            "access_token_cookie",
+            new_access_token,
+            httponly=True,
+            secure=True,
+            samesite="None",
+            max_age=app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds(),
+        )
     return response
 
 

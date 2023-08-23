@@ -1,3 +1,4 @@
+import datetime
 import os
 from flask import Blueprint, request, jsonify, current_app as app, make_response
 from flask_jwt_extended import (
@@ -27,7 +28,14 @@ def create_token():
 
     access_token = create_access_token(identity=email, expires_delta=expires)
     response = make_response(jsonify({"access_token": access_token}))
-    set_access_cookies(response, access_token)
+    response.set_cookie(
+        "access_token_cookie",
+        access_token,
+        httponly=True,
+        secure=True,
+        samesite="None",
+        max_age=expires.total_seconds(),
+    )
 
     return response
 
