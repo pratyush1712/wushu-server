@@ -3,109 +3,76 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
-from datetime import date, timedelta
-from math import ceil
-import sys
 
 
 class WushuEmail:
-    def __init__(self, gmail_username, gmail_password, type, email=""):
+    SMTP_SERVER = "smtp.gmail.com"
+    SMTP_PORT = 587
+    CHUNK_SIZE = 100
+
+    def __init__(self, gmail_username, gmail_password, email_subject="", email_body=""):
+        """
+        Initialize the WushuEmail instance.
+        """
         self.gmail_username = gmail_username
         self.gmail_password = gmail_password
-        self.email_message = self.create_email_msg()
-        self.type = type
-        self.design_email_from_template(email)
-        self.attach_images()
+        self.email_message = self.create_email_msg(email_subject, email_body)
 
-    def create_email_msg(self):
+    def create_email_msg(self, subject, body):
+        """
+        Create a MIMEMultipart email message.
+        """
         msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = self.gmail_username
+        body_content = MIMEText(body, "html")
+        msg.attach(body_content)
         return msg
 
-    def design_email_from_template(self, email=""):
-        if email != "":
-            self.email_message["subject"] = "Cornell Wushu"
-            body = MIMEText(email, "html")
-            self.email_message.attach(body)
-            return
-        now = date.today()
-        monday = now
-        sunday = monday + timedelta(days=6)
-        tuesday = monday + timedelta(days=1)
-        wednesday = monday + timedelta(days=2)
-        thursday = monday + timedelta(days=3)
-        friday = monday + timedelta(days=4)
-        saturday = monday + timedelta(days=5)
-
-        mondayDayMonth = str(monday.month) + "/" + str(monday.day)
-        thursdayDayMonth = str(thursday.month) + "/" + str(thursday.day)
-        fridayDayMonth = str(friday.month) + "/" + str(friday.day)
-        saturdayDayMonth = str(saturday.month) + "/" + str(saturday.day)
-        sundayDayMonth = str(sunday.month) + "/" + str(sunday.day)
-        self.email_message["Subject"] = f"Wushu Week of {monday.month}/{monday.day}"
-        self.email_message["From"] = "cornellwushu@gmail.com"
-        self.email_message["To"] = "cornellwushu@gmail.com"
-        html = open(f"./templates/{self.type}.html", "r").read()
-        html = html.replace("{{ monday }}", mondayDayMonth)
-        html = html.replace("{{ thursday }}", thursdayDayMonth)
-        html = html.replace("{{ friday }}", fridayDayMonth)
-        html = html.replace("{{ saturday }}", saturdayDayMonth)
-        html = html.replace("{{ sunday }}", sundayDayMonth)
-        body = MIMEText(html, "html")
-        self.email_message.attach(body)
-
-    def attach_images(self):
-        fpFB = open("./images/facebook.png", "rb")
-        fpIG = open("./images/instagram.png", "rb")
-        fpGC = open("./images/google-calendar.png", "rb")
-        fpWB = open("./images/logo.jpg", "rb")
-        fpYT = open("./images/youtube.png", "rb")
-        msgFB = MIMEImage(fpFB.read())
-        msgIG = MIMEImage(fpIG.read())
-        msgGC = MIMEImage(fpGC.read())
-        msgWB = MIMEImage(fpWB.read())
-        msgYT = MIMEImage(fpYT.read())
-        fpFB.close()
-        fpIG.close()
-        fpGC.close()
-        fpWB.close()
-        fpYT.close()
-        msgFB.add_header("Content-ID", "<facebook>")
-        msgIG.add_header("Content-ID", "<instagram>")
-        msgGC.add_header("Content-ID", "<google-calendar>")
-        msgWB.add_header("Content-ID", "<website>")
-        msgYT.add_header("Content-ID", "<youtube>")
-        self.email_message.attach(msgFB)
-        self.email_message.attach(msgIG)
-        self.email_message.attach(msgGC)
-        self.email_message.attach(msgWB)
-        self.email_message.attach(msgYT)
+    def attach_images(self, images_paths):
+        """
+        Attach images to the email.
+        """
+        for path, cid in images_paths.items():
+            with open(path, "rb") as f:
+                img = MIMEImage(f.read())
+                img.add_header("Content-ID", f"<{cid}>")
+                self.email_message.attach(img)
 
     def send_email(self, receivers):
+        """
+        Send the email to a list of receivers. Handles batch sending.
+        """
         num_receivers = len(receivers)
-        for i in range(ceil(num_receivers / 100)):
-            to = receivers[:100]
-            smtp_server = smtplib.SMTP("smtp.gmail.com", 587)
-            smtp_server.starttls()
-            smtp_server.login(self.gmail_username, self.gmail_password)
-            smtp_server.sendmail(
-                self.gmail_username, to, self.email_message.as_string()
-            )
-            smtp_server.close()
-            try:
-                receivers = receivers[100:]
-            except:
-                break
-        print("Email Sent Succesfully!")
+        for i in range(0, num_receivers, self.CHUNK_SIZE):
+            to = receivers[i : i + self.CHUNK_SIZE]
+            smtp_server = smtplib.SMTP(self.SMTP_SERVER, self.SMTP_PORT)
+            with smtplib.SMTP(self.SMTP_SERVER, self.SMTP_PORT) as smtp_server:
+                smtp_server.starttls()
+                smtp_server.login(self.gmail_username, self.gmail_password)
+                smtp_server.sendmail(
+                    self.gmail_username, to, self.email_message.as_string()
+                )
 
 
 if __name__ == "__main__":
-    email = WushuEmail(
-        os.environ.get("GMAIL_USER"), os.environ.get("GMAIL_PASSWORD"), "weekly"
+    email_subject = "Your Subject Here"
+    email_body = "Your Email Body Here"
+    wushu_email = WushuEmail(
+        os.environ.get("GMAIL_USER"),
+        os.environ.get("GMAIL_PASSWORD"),
+        email_subject,
+        email_body,
     )
-    try:
-        if sys.argv[1] == "testing":
-            email.send_email(["pratyushsudhakar03@gmail.com"])
-        else:
-            email.send_email()
-    except:
-        email.send_email()
+
+    # Images to be attached (paths and corresponding Content-ID)
+    image_paths = {
+        "./images/facebook.png": "facebook",
+        "./images/instagram.png": "instagram",
+        # ... add other images here ...
+    }
+    wushu_email.attach_images(image_paths)
+
+    # Recipients list
+    recipients = ["ps2245@cornell.edu"]
+    wushu_email.send_email(recipients)

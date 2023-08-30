@@ -1,13 +1,13 @@
 import os
 import json
-from flask import Flask, jsonify
+from flask import Flask
 from datetime import timedelta
 from flask_cors import CORS, cross_origin
 from flask_jwt_extended import JWTManager, create_access_token, set_access_cookies
 from flask_jwt_extended import get_jwt, get_jwt_identity
 from datetime import datetime, timedelta, timezone
 from endpoints.auth import auth_bp
-from endpoints.list_serve import list_serv_bp
+from endpoints.email_service import email_service_bp
 from endpoints.images import images_bp
 from endpoints.members import members_bp
 from endpoints.performances import performances_bp
@@ -79,7 +79,7 @@ def refresh_expiring_jwts(response):
 
 
 app.register_blueprint(auth_bp, url_prefix="/auth")
-app.register_blueprint(list_serv_bp, url_prefix="/list_serv")
+app.register_blueprint(email_service_bp, url_prefix="/email_service")
 app.register_blueprint(images_bp, url_prefix="/images")
 app.register_blueprint(members_bp, url_prefix="/members")
 app.register_blueprint(performances_bp, url_prefix="/performances")
